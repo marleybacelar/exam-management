@@ -5,6 +5,7 @@ Main application file for managing and taking ExamTopics-style exams
 
 import streamlit as st
 import os
+import re
 from typing import Dict, Any, List
 import pandas as pd
 from datetime import datetime
@@ -336,22 +337,25 @@ def take_exam_page():
         actual_idx = start_idx + idx
         display_question(question, actual_idx)
     
-    # Navigation and submit buttons
+    # Spacer to push navigation to bottom
+    st.markdown("<br><br>", unsafe_allow_html=True)
+
+    # Navigation and submit buttons - aligned to bottom
     st.markdown("---")
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         if current_page > 0:
             if st.button("⬅️ Previous Page", use_container_width=True):
                 st.session_state.current_page_num -= 1
                 st.rerun()
-    
+
     with col2:
         if current_page < total_pages - 1:
             if st.button("Next Page ➡️", use_container_width=True):
                 st.session_state.current_page_num += 1
                 st.rerun()
-    
+
     with col3:
         # Page selector
         page_options = list(range(1, total_pages + 1))
@@ -359,25 +363,35 @@ def take_exam_page():
             "Jump to page:",
             page_options,
             index=current_page,
-            key="page_selector"
+            key=f"page_selector_{current_page}"  # Unique key to force update
         )
         if selected_page - 1 != current_page:
             st.session_state.current_page_num = selected_page - 1
             st.rerun()
-    
+
     with col4:
         if st.button("✅ Submit Exam", type="primary", use_container_width=True):
             st.session_state.exam_submitted = True
             st.rerun()
+
+    # Additional bottom spacing
+    st.markdown("<br>", unsafe_allow_html=True)
 
 
 def display_question(question: Dict[str, Any], index: int):
     """Display a single question with appropriate input widget."""
     st.markdown("---")
     
-    # Question text
+    # Question text - clean formatting
+    question_text = question["question"]
+    # Remove case study formatting and headers
+    question_text = re.sub(r'HOTSPOT.*?(?=Question|\Z)', '', question_text, flags=re.IGNORECASE | re.DOTALL)
+    question_text = re.sub(r'Case study.*?(?=Question|\Z)', '', question_text, flags=re.IGNORECASE | re.DOTALL)
+    question_text = re.sub(r'This is a case study\..*?(?=Question|\Z)', '', question_text, flags=re.IGNORECASE | re.DOTALL)
+    question_text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials).*?(?:\(|-|\d+ of \d+|$)', '', question_text, flags=re.IGNORECASE | re.DOTALL)
+
     st.markdown(f"### Question {index + 1}")
-    st.markdown(question["question"])
+    st.markdown(question_text.strip())
     
     # Display images if any
     images = question.get("images", [])
