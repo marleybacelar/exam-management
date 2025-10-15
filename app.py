@@ -337,11 +337,27 @@ def take_exam_page():
         actual_idx = start_idx + idx
         display_question(question, actual_idx)
     
-    # Spacer to push navigation to bottom
-    st.markdown("<br><br>", unsafe_allow_html=True)
-
-    # Navigation and submit buttons - aligned to bottom
+    # Navigation buttons - fixed at bottom
     st.markdown("---")
+    st.markdown(
+        """
+        <style>
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: white;
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            z-index: 999;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Use columns for navigation layout
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
@@ -373,9 +389,6 @@ def take_exam_page():
         if st.button("✅ Submit Exam", type="primary", use_container_width=True):
             st.session_state.exam_submitted = True
             st.rerun()
-
-    # Additional bottom spacing
-    st.markdown("<br>", unsafe_allow_html=True)
 
 
 def display_question(question: Dict[str, Any], index: int):
