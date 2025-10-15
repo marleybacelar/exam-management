@@ -52,3 +52,6 @@ diagnostic/
 
 # PDF files
 pdfs/
+Part1.pdf
+test_results.txt
+verify_parsing.py
