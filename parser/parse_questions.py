@@ -71,26 +71,44 @@ def extract_choices(text: str) -> Dict[str, str]:
         # Remove the footer text that appears everywhere
         choice_text = re.sub(r'Microsoft Certified: Azure Administrator Associate.*?Question Bank.*?\(.*?\)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
         
-        # Look for explanation patterns - be aggressive
-        # Many explanations start with common patterns or have specific indicators
+        # Multi-layer explanation removal - be extremely aggressive
         explanation_patterns = [
-            # Colon-based explanations - catch ALL colons followed by explanatory text
+            # Layer 1: Comment phrases that start explanations
+            r'^The\s+(majority|comments|community)',  # At start
+            r'\s+The\s+(majority|comments|community)',   # In middle
+            r'\s+the\s+(majority|comments|community)',   # Case insensitive
+
+            # Layer 2: Common explanation starters
+            r'\s+(because|since|as|therefore|however|although|while|when|where|if)\s+',  # Common explanation words
+            r'\s+(agree|recommends?|suggests?|explains?|indicates?|shows?|demonstrates?)\s+',  # Action words
+
+            # Layer 3: Colon-based explanations (any capital letter after colon)
             r':\s*[A-Z]',  # General: any colon followed by capital letter
-            # Sentence endings followed by explanation starters
+
+            # Layer 4: Sentence-ending explanation starters
             r'\.\s+(This|It|However|Therefore|Also|While|Although|The|Since|Because|As|If|When|Where)\s+',
-            # Direct explanation indicators
-            r'\s+-\s+',  # Dash explanations like "Option A - This explains..."
+
+            # Layer 5: Direct explanation indicators
+            r'\s+-\s+',  # Dash explanations
             r'\.\s+Citations',
             r'\.\s+Refer\s+to',
             r'\.\s+See\s+',
             r'\.\s+For\s+more',
-            # Comments that sneak in - expanded patterns
-            r'^\s*The\s+(majority|comments|community)',  # Match at start of text
-            r'\s+The\s+(majority|comments|community)',   # Match in middle
+
+            # Layer 6: Specific explanation phrases
             r'\s+AI\s+Recommended',
             r'\s+Several\s+users',
             r'\s+Many\s+comments',
             r'\s+Furthermore',
+            r'\s+receives?\s+the\s+license',  # Specific to license questions
+            r'\s+inherits?\s+the',  # Specific to inheritance questions
+
+            # Layer 7: Additional explanation patterns
+            r'\.\s+The\s+comments?\s+(agree|recommends?|suggests?)',  # "The comments agree..."
+            r'\s+the\s+comments?\s+(agree|recommends?|suggests?)',   # Case insensitive
+            r'\s+receives?\s+the\s+license\s+through',  # "receives the license through"
+            r'\s+does\s+not\s+inherit',  # "does not inherit"
+            r'\s+is\s+incorrect\s+because',  # "is incorrect because"
         ]
         
         # Try to split at the first explanation pattern
