@@ -56,21 +56,67 @@ def detect_question_type(question_stem: str, choices: Dict[str, str], has_image:
 def extract_choices(text: str) -> Dict[str, str]:
     """
     Extract multiple choice options (A., B., C., D., etc.)
+    Extracts only the choice text, not the explanations that follow.
     """
     choices = {}
     # Match patterns like "A. Some text" or "A) Some text"
-    # Stop at next choice, or common delimiters like "Microsoft Certified", "Suggested Answer", etc.
+    # Stop at next choice, or common delimiters
     pattern = r'^([A-Z])[.)]\s*(.+?)(?=^[A-Z][.)]|Microsoft Certified|Suggested Answer|Discussion|Hot Area|Note:|HOTSPOT|\Z)'
     matches = re.finditer(pattern, text, re.MULTILINE | re.DOTALL)
     
     for match in matches:
         letter = match.group(1)
         choice_text = match.group(2).strip()
-        # Clean up the text
+        
+        # Remove the footer text that appears everywhere
+        choice_text = re.sub(r'Microsoft Certified: Azure Administrator Associate.*?Question Bank.*?\(.*?\)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
+        
+        # Look for explanation patterns - be aggressive
+        # Many explanations start with common patterns or have specific indicators
+        explanation_patterns = [
+            # Sentence endings followed by explanation starters
+            r'\.\s+(This|It|However|Therefore|Also|While|Although|The|Since|Because|As|If|When|Where)\s+',
+            # Direct explanation indicators
+            r'\s+-\s+',  # Dash explanations like "Option A - This explains..."
+            r'\.\s+Citations',
+            r'\.\s+Refer\s+to',
+            r'\.\s+See\s+',
+            r'\.\s+For\s+more',
+            # Comments that sneak in
+            r'\s+The comments',
+            r'\s+AI Recommended',
+            r'\s+Several users',
+            r'\s+Many comments',
+            r'\s+Furthermore',
+        ]
+        
+        # Try to split at the first explanation pattern
+        for pattern_str in explanation_patterns:
+            split_match = re.search(pattern_str, choice_text, re.IGNORECASE)
+            if split_match:
+                choice_text = choice_text[:split_match.start()].strip()
+                # Add back the period if we cut at a sentence boundary
+                if not choice_text.endswith('.') and split_match.group().startswith('.'):
+                    choice_text += '.'
+                break
+        
+        # Clean up remaining whitespace
         choice_text = re.sub(r'\s+', ' ', choice_text)
+        
         # Remove any trailing page markers or footers
         choice_text = re.sub(r'\s*(Microsoft Certified|Question Bank|ExamTopics).*$', '', choice_text, flags=re.IGNORECASE)
-        choices[letter] = choice_text
+        
+        # Trim trailing periods if they're artifacts
+        choice_text = choice_text.rstrip('.')
+        
+        # Final cleanup - if the text is way too long (over 200 chars), it probably includes explanation
+        # Take only up to the first period for very long options
+        if len(choice_text) > 200 and '.' in choice_text:
+            first_period = choice_text.find('.')
+            if first_period > 20:  # Make sure we have a reasonable amount of text
+                choice_text = choice_text[:first_period + 1]
+        
+        choices[letter] = choice_text.strip()
     
     return choices
 
