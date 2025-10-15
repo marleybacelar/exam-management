@@ -28,6 +28,45 @@ st.set_page_config(
 )
 
 
+def check_password():
+    """
+    Check if user is authenticated.
+    Returns True if password is correct or not set.
+    """
+    # Get password from environment variable
+    correct_password = os.environ.get("APP_PASSWORD", None)
+    
+    # If no password is set, allow access
+    if not correct_password:
+        return True
+    
+    # Initialize session state for authentication
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    
+    # If already authenticated, return True
+    if st.session_state.authenticated:
+        return True
+    
+    # Show password input
+    st.title("🔒 Authentication Required")
+    st.markdown("Please enter the password to access the Exam Management System.")
+    
+    password = st.text_input("Password", type="password", key="password_input")
+    
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        if st.button("Login", type="primary"):
+            if password == correct_password:
+                st.session_state.authenticated = True
+                st.success("✅ Access granted!")
+                st.rerun()
+            else:
+                st.error("❌ Incorrect password. Please try again.")
+    
+    return False
+
+
 def initialize_session_state():
     """Initialize session state variables."""
     if "current_page" not in st.session_state:
@@ -370,8 +409,23 @@ def display_question(question: Dict[str, Any], index: int):
         clean_text = clean_text.rstrip(':').strip()
         clean_choices[key] = clean_text if clean_text else value
     
-    # Display appropriate input widget
-    if q_type == "multiple_choice_single" or q_type == "yes_no":
+    # For drag-and-drop and image_selection (hotspot), use text input
+    if q_type == "drag_and_drop" or q_type == "image_selection":
+        st.info("💡 **Study Question:** Review the question and images, then write your answer below.")
+        current_answer = st.session_state.user_answers.get(question_id, "")
+        answer = st.text_area(
+            "Your answer:",
+            value=current_answer,
+            height=150,
+            key=f"q_{question_id}",
+            help="Write your complete answer here. You can check the correct answer using the 'Show Answer' button below."
+        )
+        
+        if answer:
+            st.session_state.user_answers[question_id] = answer
+    
+    # Display appropriate input widget for other question types
+    elif q_type == "multiple_choice_single" or q_type == "yes_no":
         options = list(clean_choices.keys())
         
         # Get current answer
@@ -677,6 +731,10 @@ def view_results_page():
 # Main application routing
 def main():
     """Main application entry point."""
+    # Check password first
+    if not check_password():
+        return
+    
     initialize_session_state()
     
     # Sidebar
