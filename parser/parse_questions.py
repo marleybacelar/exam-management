@@ -74,6 +74,18 @@ def extract_choices(text: str) -> Dict[str, str]:
         # Look for explanation patterns - be aggressive
         # Many explanations start with common patterns or have specific indicators
         explanation_patterns = [
+            # Colon-based explanations (very common!) - match the colon itself
+            r':\s*This',
+            r':\s*It',
+            r':\s*However',
+            r':\s*Therefore',
+            r':\s*Also',
+            r':\s*While',
+            r':\s*Although',
+            r':\s*The\s+',
+            r':\s*Since',
+            r':\s*Because',
+            r':\s*As\s+',
             # Sentence endings followed by explanation starters
             r'\.\s+(This|It|However|Therefore|Also|While|Although|The|Since|Because|As|If|When|Where)\s+',
             # Direct explanation indicators
