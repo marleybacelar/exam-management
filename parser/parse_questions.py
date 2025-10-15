@@ -175,6 +175,21 @@ def parse_questions_from_text(text: str, source_pdf: str, images_by_page: Dict[i
             question_stem = question_block.strip()
             rest_of_block = ""
         
+        # Clean question stem by removing answer sections
+        # Remove everything after "Suggested Answer", "Discussion Summary", or "AI Recommended Answer"
+        answer_markers = [
+            "Suggested Answer:",
+            "Discussion Summary",
+            "AI Recommended Answer",
+            "Web Recommended Answer",
+            "Community Answer"
+        ]
+        for marker in answer_markers:
+            marker_pos = question_stem.find(marker)
+            if marker_pos != -1:
+                question_stem = question_stem[:marker_pos].strip()
+                break
+        
         # Extract choices
         choices = extract_choices(rest_of_block)
         
