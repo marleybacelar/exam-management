@@ -1,0 +1,8 @@
+# Core dependencies
+streamlit>=1.28.0
+PyMuPDF>=1.23.0
+pandas>=2.0.0
+
+# Optional dependencies for enhanced functionality
+# Pillow>=10.0.0  # For additional image processing
+# pytesseract>=0.3.10  # For OCR capabilities if needed
