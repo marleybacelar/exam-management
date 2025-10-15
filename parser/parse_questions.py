@@ -74,18 +74,8 @@ def extract_choices(text: str) -> Dict[str, str]:
         # Look for explanation patterns - be aggressive
         # Many explanations start with common patterns or have specific indicators
         explanation_patterns = [
-            # Colon-based explanations (very common!) - match the colon itself
-            r':\s*This',
-            r':\s*It',
-            r':\s*However',
-            r':\s*Therefore',
-            r':\s*Also',
-            r':\s*While',
-            r':\s*Although',
-            r':\s*The\s+',
-            r':\s*Since',
-            r':\s*Because',
-            r':\s*As\s+',
+            # Colon-based explanations - catch ALL colons followed by explanatory text
+            r':\s*[A-Z]',  # General: any colon followed by capital letter
             # Sentence endings followed by explanation starters
             r'\.\s+(This|It|However|Therefore|Also|While|Although|The|Since|Because|As|If|When|Where)\s+',
             # Direct explanation indicators
@@ -94,11 +84,12 @@ def extract_choices(text: str) -> Dict[str, str]:
             r'\.\s+Refer\s+to',
             r'\.\s+See\s+',
             r'\.\s+For\s+more',
-            # Comments that sneak in
-            r'\s+The comments',
-            r'\s+AI Recommended',
-            r'\s+Several users',
-            r'\s+Many comments',
+            # Comments that sneak in - expanded patterns
+            r'^\s*The\s+(majority|comments|community)',  # Match at start of text
+            r'\s+The\s+(majority|comments|community)',   # Match in middle
+            r'\s+AI\s+Recommended',
+            r'\s+Several\s+users',
+            r'\s+Many\s+comments',
             r'\s+Furthermore',
         ]
         
