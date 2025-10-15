@@ -82,8 +82,8 @@ def extract_choices(text: str) -> Dict[str, str]:
             r'\s+(because|since|as|therefore|however|although|while|when|where|if)\s+',  # Common explanation words
             r'\s+(agree|recommends?|suggests?|explains?|indicates?|shows?|demonstrates?)\s+',  # Action words
 
-            # Layer 3: Colon-based explanations (any capital letter after colon)
-            r':\s*[A-Z]',  # General: any colon followed by capital letter
+            # Layer 3: Colon-based explanations (ANYTHING after colon)
+            r':\s*.',  # General: any colon followed by any character
 
             # Layer 4: Sentence-ending explanation starters
             r'\.\s+(This|It|However|Therefore|Also|While|Although|The|Since|Because|As|If|When|Where)\s+',
@@ -120,6 +120,13 @@ def extract_choices(text: str) -> Dict[str, str]:
                 if not choice_text.endswith('.') and split_match.group().startswith('.'):
                     choice_text += '.'
                 break
+
+        # Special handling for colon patterns - remove everything after colon including the colon
+        colon_match = re.search(r':\s*.', choice_text, re.IGNORECASE)
+        if colon_match:
+            choice_text = choice_text[:colon_match.start()].strip()
+            # Remove trailing colon if it exists
+            choice_text = choice_text.rstrip(':').strip()
         
         # Clean up remaining whitespace
         choice_text = re.sub(r'\s+', ' ', choice_text)
