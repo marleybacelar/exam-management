@@ -65,17 +65,39 @@ def extract_text_and_images(pdf_path: str, output_dir: str, pdf_name: str) -> Tu
 def clean_text(text: str) -> str:
     """
     Clean and normalize extracted text.
-    Remove repeated headers, footers, and normalize whitespace.
+    Remove repeated headers, footers, formatting characters, and normalize whitespace.
     """
     # Remove common ExamTopics headers/footers
     text = re.sub(r'www\.examtopics\.com', '', text, flags=re.IGNORECASE)
     text = re.sub(r'Page \d+ of \d+', '', text, flags=re.IGNORECASE)
     text = re.sub(r'Exam [A-Z]+-\d+', '', text, flags=re.IGNORECASE)
-    
+
+    # Remove Microsoft Certified footer text
+    text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials|ExamTopics).*?(?:\(|-|\d+ of \d+|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'Question Bank.*?(?:\(|-|\d+ of \d+|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'ExamTopics.*?(?:\(|\d+ of \d+|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
+
+    # Remove formatting characters and artifacts
+    text = re.sub(r'[^\x20-\x7E\n\r\t]', '', text)  # Remove non-printable characters except basic whitespace
+    text = re.sub(r'\x0c', '', text)  # Remove form feed characters
+    text = re.sub(r'\x0b', '', text)  # Remove vertical tab characters
+
+    # Remove excessive bold/formatting markers (common in PDF extraction)
+    text = re.sub(r'\*\*+', '', text)  # Remove multiple asterisks
+    text = re.sub(r'__+', '', text)   # Remove multiple underscores
+
+    # Remove repeated headers and navigation text
+    text = re.sub(r'(?:HOTSPOT|Case study|Overview|Existing Environment).*?(?=\n\n|\Z)', '', text, flags=re.IGNORECASE | re.DOTALL)
+
+    # Clean up case study formatting
+    text = re.sub(r'This is a case study\..*?(?=Question|\Z)', '', text, flags=re.IGNORECASE | re.DOTALL)
+
     # Normalize whitespace
     text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)  # Remove excessive blank lines
     text = re.sub(r' +', ' ', text)  # Remove multiple spaces
-    
+    text = re.sub(r'\n +', '\n', text)  # Remove leading spaces on lines
+    text = re.sub(r' +\n', '\n', text)  # Remove trailing spaces on lines
+
     return text.strip()
 
 

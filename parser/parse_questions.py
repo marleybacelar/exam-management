@@ -36,9 +36,9 @@ def detect_question_type(question_stem: str, choices: Dict[str, str], has_image:
         return "multiple_choice_multiple"
     
     # Check for drag and drop questions
-    drag_keywords = ["drag", "drop", "match", "order", "arrange", "sequence"]
+    drag_keywords = ["drag", "drop", "match", "order", "arrange", "sequence", "hotspot", "hot area"]
     if any(keyword in stem_lower for keyword in drag_keywords):
-        return "drag_and_drop"
+        return "input_text"  # These require text input, not selection
     
     # Check for text input questions
     input_keywords = ["your answer", "_____", "fill in", "type the", "enter the"]
@@ -68,8 +68,10 @@ def extract_choices(text: str) -> Dict[str, str]:
         letter = match.group(1)
         choice_text = match.group(2).strip()
         
-        # Remove the footer text that appears everywhere
-        choice_text = re.sub(r'Microsoft Certified: Azure Administrator Associate.*?Question Bank.*?\(.*?\)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
+        # Remove the footer text that appears everywhere - more comprehensive pattern
+        choice_text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials|ExamTopics).*?(?:\(|-|\d+ of \d+|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
+        choice_text = re.sub(r'Question Bank.*?(?:\(|-|\d+ of \d+|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
+        choice_text = re.sub(r'ExamTopics.*?(?:\(|\d+ of \d+|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
         
         # Multi-layer explanation removal - be extremely aggressive
         explanation_patterns = [
