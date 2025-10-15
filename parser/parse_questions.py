@@ -30,7 +30,8 @@ def detect_question_type(question_stem: str, choices: Dict[str, str], has_image:
     # Check for multiple answer questions
     multi_keywords = ["select two", "select three", "choose two", "choose three", 
                       "select all that apply", "choose all that apply", "select all",
-                      "pick two", "pick three"]
+                      "pick two", "pick three", "two correct", "three correct",
+                      "each correct selection", "multiple answers"]
     if any(keyword in stem_lower for keyword in multi_keywords):
         return "multiple_choice_multiple"
     
