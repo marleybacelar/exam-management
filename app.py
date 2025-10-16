@@ -403,7 +403,11 @@ def display_question(question: Dict[str, Any], index: int):
     question_text = re.sub(r'This is a case study\..*?(?=Question|\Z)', '', question_text, flags=re.IGNORECASE | re.DOTALL)
     question_text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials).*?(?:\(|-|\d+ of \d+|$)', '', question_text, flags=re.IGNORECASE | re.DOTALL)
 
-    st.markdown(f"### Question {index + 1}")
+    # Get PDF source and question number
+    pdf_source = question.get("source_pdf", "Unknown")
+    pdf_question_num = question.get("pdf_question_number", str(index + 1))
+    
+    st.markdown(f"### Question {pdf_question_num} ({pdf_source})")
     st.markdown(question_text.strip())
     
     # Display images if any
@@ -596,7 +600,11 @@ def display_exam_results(exam_name: str, questions: List[Dict[str, Any]]):
     st.subheader("📝 Detailed Review")
     
     for idx, detail in enumerate(details):
-        with st.expander(f"Question {idx + 1} - {'✅ Correct' if detail['is_correct'] else '❌ Incorrect'}"):
+        question = questions[idx]
+        pdf_source = question.get("source_pdf", "Unknown")
+        pdf_question_num = question.get("pdf_question_number", str(idx + 1))
+        
+        with st.expander(f"Question {pdf_question_num} ({pdf_source}) - {'✅ Correct' if detail['is_correct'] else '❌ Incorrect'}"):
             st.markdown(f"**Question:** {detail['question']}")
             st.markdown(f"**Your Answer:** {detail['user_answer'] or 'Not answered'}")
             st.markdown(f"**Correct Answer:** {detail['correct_answer']}")
@@ -649,10 +657,20 @@ def edit_exam_page():
     
     # Question selector
     question_ids = [q["question_id"] for q in questions]
+    
+    # Create a mapping for display
+    def format_question_label(q_id):
+        q = next((q for q in questions if q["question_id"] == q_id), None)
+        if q:
+            pdf_source = q.get("source_pdf", "Unknown")
+            pdf_num = q.get("pdf_question_number", str(q_id))
+            return f"Question {pdf_num} ({pdf_source})"
+        return f"Question {q_id}"
+    
     selected_id = st.selectbox(
         "Select Question to Edit",
         question_ids,
-        format_func=lambda x: f"Question {x}"
+        format_func=format_question_label
     )
     
     # Find selected question
@@ -660,7 +678,9 @@ def edit_exam_page():
     
     if question:
         st.markdown("---")
-        st.subheader(f"Edit Question {selected_id}")
+        pdf_source = question.get("source_pdf", "Unknown")
+        pdf_num = question.get("pdf_question_number", str(selected_id))
+        st.subheader(f"Edit Question {pdf_num} ({pdf_source})")
         
         # Editable fields
         with st.form(f"edit_form_{selected_id}"):
