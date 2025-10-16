@@ -69,14 +69,13 @@ def test_parse_pdf(pdf_path, exam_name="test_exam"):
 
 if __name__ == "__main__":
     # Test with Part1.pdf
-    pdf_path = "pdfs/az-104/Part1.pdf"
-    
+    pdf_path = "Part1.pdf"
+
     if os.path.exists(pdf_path):
         questions = test_parse_pdf(pdf_path)
     else:
         print(f"PDF file not found: {pdf_path}")
-        print("Available PDF files:")
-        if os.path.exists("pdfs/az-104"):
-            for f in os.listdir("pdfs/az-104"):
-                if f.endswith(".pdf"):
-                    print(f"  - pdfs/az-104/{f}")
+        print("Available PDF files in current directory:")
+        for f in os.listdir("."):
+            if f.endswith(".pdf"):
+                print(f"  - {f}")

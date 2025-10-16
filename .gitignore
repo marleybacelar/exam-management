@@ -55,3 +55,4 @@ pdfs/
 Part1.pdf
 test_results.txt
 verify_parsing.py
+current_verification.txt

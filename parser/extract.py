@@ -12,53 +12,114 @@ from pathlib import Path
 
 def extract_text_and_images(pdf_path: str, output_dir: str, pdf_name: str) -> Tuple[str, List[str]]:
     """
-    Extract all text and images from a PDF file.
-    
+    Extract all text and images from a PDF file with enhanced image detection.
+
     Args:
         pdf_path: Path to the PDF file
         output_dir: Directory to save extracted images
         pdf_name: Name identifier for the PDF (for image naming)
-    
+
     Returns:
         Tuple of (full_text, list_of_image_paths)
     """
     doc = fitz.open(pdf_path)
     full_text = ""
     image_paths = []
-    
+
     # Create images directory if it doesn't exist
     images_dir = os.path.join(output_dir, "images")
     os.makedirs(images_dir, exist_ok=True)
-    
+
     for page_num in range(len(doc)):
         page = doc[page_num]
-        
+
         # Extract text
         page_text = page.get_text()
         full_text += f"\n--- PAGE {page_num + 1} ---\n"
         full_text += page_text
-        
-        # Extract images
+
+        # Enhanced image extraction - try multiple methods
+        # Method 1: Standard image extraction
         image_list = page.get_images(full=True)
+        extracted_xrefs = set()
+
         for img_index, img in enumerate(image_list):
             try:
                 xref = img[0]
+                if xref in extracted_xrefs:
+                    continue
+                extracted_xrefs.add(xref)
+
                 base_image = doc.extract_image(xref)
                 image_bytes = base_image["image"]
                 image_ext = base_image["ext"]
-                
+
                 # Save image
                 image_filename = f"{pdf_name}_page{page_num + 1}_img{img_index + 1}.{image_ext}"
                 image_path = os.path.join(images_dir, image_filename)
-                
+
                 with open(image_path, "wb") as img_file:
                     img_file.write(image_bytes)
-                
+
                 image_paths.append(image_filename)
+                print(f"Extracted image: {image_filename}")
             except Exception as e:
-                print(f"Error extracting image on page {page_num + 1}: {e}")
-    
+                print(f"Error extracting standard image on page {page_num + 1}: {e}")
+
+        # Method 2: Draw-based image extraction for embedded objects
+        try:
+            # Look for drawings that contain images (diagrams, charts, etc.)
+            for drawing_index, drawing in enumerate(page.get_drawings()):
+                # Check if this drawing contains raster images
+                if drawing.get("items"):
+                    for item in drawing["items"]:
+                        if item[0] == "im":  # Image item
+                            try:
+                                img_xref = item[1]
+                                if img_xref not in extracted_xrefs:
+                                    extracted_xrefs.add(img_xref)
+                                    base_image = doc.extract_image(img_xref)
+                                    image_bytes = base_image["image"]
+                                    image_ext = base_image["ext"]
+
+                                    image_filename = f"{pdf_name}_page{page_num + 1}_drawing{drawing_index + 1}.{image_ext}"
+                                    image_path = os.path.join(images_dir, image_filename)
+
+                                    with open(image_path, "wb") as img_file:
+                                        img_file.write(image_bytes)
+
+                                    image_paths.append(image_filename)
+                                    print(f"Extracted drawing image: {image_filename}")
+                            except Exception as e:
+                                print(f"Error extracting drawing image on page {page_num + 1}: {e}")
+        except Exception as e:
+            print(f"Error in drawing extraction on page {page_num + 1}: {e}")
+
+        # Skip graphic extraction for now - too many errors and not adding quality images
+
+        # Method 4: Direct bitmap extraction for pages with diagrams
+        try:
+            # Try to get raw pixmap and save if it contains meaningful content
+            pix = page.get_pixmap()
+            if pix.width > 100 and pix.height > 100:  # Skip tiny pages
+                # This is a fallback - we could analyze the pixmap for diagrams
+                # For now, we'll save it if it seems like it contains diagram-like content
+                pix_bytes = pix.tobytes("png")
+                # Heuristic: if the image is wide and tall (diagram-like), save it
+                if pix.width > 400 or pix.height > 400:  # Increased threshold for better pages
+                    image_filename = f"{pdf_name}_page{page_num + 1}_fullpage.png"
+                    image_path = os.path.join(images_dir, image_filename)
+
+                    with open(image_path, "wb") as img_file:
+                        img_file.write(pix_bytes)
+
+                    image_paths.append(image_filename)
+                    print(f"Extracted full page diagram: {image_filename}")
+        except Exception as e:
+            print(f"Error extracting full page on page {page_num + 1}: {e}")
+
     doc.close()
+    print(f"Total images extracted: {len(image_paths)}")
     return full_text, image_paths
 
 
