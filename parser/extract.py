@@ -133,10 +133,12 @@ def clean_text(text: str) -> str:
     text = re.sub(r'Page \d+ of \d+', '', text, flags=re.IGNORECASE)
     text = re.sub(r'Exam [A-Z]+-\d+', '', text, flags=re.IGNORECASE)
 
-    # Remove Microsoft Certified footer text
-    text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials|ExamTopics).*?(?:\(|-|\d+ of \d+|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r'Question Bank.*?(?:\(|-|\d+ of \d+|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r'ExamTopics.*?(?:\(|\d+ of \d+|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
+    # Remove Microsoft Certified footer text - more comprehensive patterns
+    text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials|ExamTopics).*?(?:\(|-|\d+ of \d+\)|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'Question Bank.*?(?:\(|-|\d+ of \d+\)|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'ExamTopics.*?(?:\(|\d+ of \d+\)|$)', '', text, flags=re.IGNORECASE | re.DOTALL)
+    # Remove standalone page markers like "1 of 5)" or "(1 of 5)"
+    text = re.sub(r'\(?\d+\s+of\s+\d+\)', '', text, flags=re.IGNORECASE)
 
     # Remove formatting characters and artifacts
     text = re.sub(r'[^\x20-\x7E\n\r\t]', '', text)  # Remove non-printable characters except basic whitespace

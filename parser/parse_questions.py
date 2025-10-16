@@ -69,9 +69,11 @@ def extract_choices(text: str) -> Dict[str, str]:
         choice_text = match.group(2).strip()
         
         # Remove the footer text that appears everywhere - more comprehensive pattern
-        choice_text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials|ExamTopics).*?(?:\(|-|\d+ of \d+|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
-        choice_text = re.sub(r'Question Bank.*?(?:\(|-|\d+ of \d+|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
-        choice_text = re.sub(r'ExamTopics.*?(?:\(|\d+ of \d+|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
+        choice_text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials|ExamTopics).*?(?:\(|-|\d+\s+of\s+\d+\)|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
+        choice_text = re.sub(r'Question Bank.*?(?:\(|-|\d+\s+of\s+\d+\)|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
+        choice_text = re.sub(r'ExamTopics.*?(?:\(|\d+\s+of\s+\d+\)|$)', '', choice_text, flags=re.IGNORECASE | re.DOTALL)
+        # Remove standalone page markers like "1 of 5)" or "(1 of 5)"
+        choice_text = re.sub(r'\(?\d+\s+of\s+\d+\)', '', choice_text, flags=re.IGNORECASE)
         
         # Multi-layer explanation removal - be extremely aggressive
         explanation_patterns = [
@@ -124,11 +126,35 @@ def extract_choices(text: str) -> Dict[str, str]:
                 break
 
         # Special handling for colon patterns - remove everything after colon including the colon
-        colon_match = re.search(r':\s*.', choice_text, re.IGNORECASE)
-        if colon_match:
-            choice_text = choice_text[:colon_match.start()].strip()
-            # Remove trailing colon if it exists
-            choice_text = choice_text.rstrip(':').strip()
+        # More aggressive: if text has a colon, check if what follows is an explanation
+        if ':' in choice_text:
+            # Split at first colon
+            parts = choice_text.split(':', 1)
+            if len(parts) == 2:
+                before_colon = parts[0].strip()
+                after_colon = parts[1].strip()
+                
+                # If the text after colon is long (>30 chars) or starts with explanation words,
+                # or if there's any text after colon at all (most choices shouldn't have colons),
+                # it's likely an explanation, so remove it
+                explanation_starters = ['this', 'while', 'although', 'however', 'because', 'since', 
+                                       'the', 'it', 'management', 'creating', 'using', 'modifying',
+                                       'a ', 'an ', 'is ', 'are ', 'was ', 'were ', 'will ', 'would ']
+                
+                # Remove explanation if:
+                # 1. Text after colon is long (>30 chars)
+                # 2. Starts with common explanation words
+                # 3. Before colon looks like a complete answer (>10 chars)
+                if (len(after_colon) > 30 or 
+                    any(after_colon.lower().startswith(word) for word in explanation_starters) or
+                    (len(before_colon) > 10 and len(after_colon) > 0)):
+                    choice_text = before_colon
+                else:
+                    # Keep the full text only if it's very short (like "A: B" format)
+                    choice_text = choice_text
+        
+        # Remove any trailing colons that might remain
+        choice_text = choice_text.rstrip(':').strip()
         
         # Clean up remaining whitespace
         choice_text = re.sub(r'\s+', ' ', choice_text)
@@ -200,6 +226,11 @@ def extract_explanation(text: str, explanation_type: str) -> Optional[str]:
             explanation = match.group(1).strip()
             # Clean up
             explanation = re.sub(r'\s+', ' ', explanation)
+            # Remove footer patterns
+            explanation = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials|ExamTopics).*?(?:\(|-|\d+\s+of\s+\d+\)|$)', '', explanation, flags=re.IGNORECASE | re.DOTALL)
+            explanation = re.sub(r'Question Bank.*?(?:\(|-|\d+\s+of\s+\d+\)|$)', '', explanation, flags=re.IGNORECASE | re.DOTALL)
+            explanation = re.sub(r'\(?\d+\s+of\s+\d+\)', '', explanation, flags=re.IGNORECASE)
+            explanation = explanation.strip()
             return explanation
     
     return None
@@ -219,8 +250,9 @@ def parse_questions_from_text(text: str, source_pdf: str, images_by_page: Dict[i
     """
     questions = []
     
-    # Split text by question markers - updated to handle "Question" without numbers
-    question_pattern = r'(?:^|\n)Question\s*\n'
+    # Split text by question markers - capture question numbers
+    # Pattern matches "Question" optionally followed by a number
+    question_pattern = r'(?:^|\n)Question\s*(\d*)\s*\n'
     splits = re.split(question_pattern, text, flags=re.MULTILINE)
     
     # First element is text before first question, skip it
@@ -228,7 +260,17 @@ def parse_questions_from_text(text: str, source_pdf: str, images_by_page: Dict[i
         splits = splits[1:]
     
     # Process each question block
-    for i, question_block in enumerate(splits):
+    # After split, we get: [question_num, question_text, question_num, question_text, ...]
+    i = 0
+    question_index = 0
+    while i < len(splits):
+        # Get question number (might be empty string) and question block
+        pdf_question_number = splits[i] if i < len(splits) else ""
+        question_block = splits[i + 1] if i + 1 < len(splits) else ""
+        
+        # Move to next question
+        i += 2
+        question_index += 1
         if not question_block.strip():
             continue
         
@@ -266,6 +308,12 @@ def parse_questions_from_text(text: str, source_pdf: str, images_by_page: Dict[i
                 question_stem = question_stem[:marker_pos].strip()
                 break
         
+        # Remove footer patterns from question stem
+        question_stem = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials|ExamTopics).*?(?:\(|-|\d+\s+of\s+\d+\)|$)', '', question_stem, flags=re.IGNORECASE | re.DOTALL)
+        question_stem = re.sub(r'Question Bank.*?(?:\(|-|\d+\s+of\s+\d+\)|$)', '', question_stem, flags=re.IGNORECASE | re.DOTALL)
+        question_stem = re.sub(r'\(?\d+\s+of\s+\d+\)', '', question_stem, flags=re.IGNORECASE)
+        question_stem = question_stem.strip()
+        
         # Extract choices
         choices = extract_choices(rest_of_block)
         
@@ -288,7 +336,8 @@ def parse_questions_from_text(text: str, source_pdf: str, images_by_page: Dict[i
         
         # Build question object
         question_obj = {
-            "question_id": len(questions) + 1,
+            "question_id": question_index,
+            "pdf_question_number": pdf_question_number if pdf_question_number else str(question_index),
             "source_pdf": source_pdf,
             "page_number": page_number,
             "question_type": question_type,
