@@ -86,6 +86,10 @@ def initialize_session_state():
         st.session_state.exam_submitted = False
     if "exam_questions" not in st.session_state:
         st.session_state.exam_questions = []
+    if "flagged_questions" not in st.session_state:
+        st.session_state.flagged_questions = set()
+    if "show_flagged_only" not in st.session_state:
+        st.session_state.show_flagged_only = False
 
 
 def home_page():
@@ -125,9 +129,12 @@ def home_page():
                         st.session_state.selected_exam = exam_name
                         st.session_state.current_page = "take_exam"
                         st.session_state.current_question_index = 0
+                        st.session_state.current_page_num = 0
                         st.session_state.user_answers = {}
                         st.session_state.exam_submitted = False
                         st.session_state.exam_questions = load_exam(exam_name)
+                        st.session_state.flagged_questions = set()
+                        st.session_state.show_flagged_only = False
                         st.rerun()
                 
                 with col3:
@@ -317,24 +324,68 @@ def take_exam_page():
     end_idx = min(start_idx + questions_per_page, len(questions))
     current_questions = questions[start_idx:end_idx]
     
+    # Filter toggle for flagged questions
+    col_filter1, col_filter2 = st.columns([3, 1])
+    with col_filter1:
+        pass  # Empty space
+    with col_filter2:
+        show_flagged = st.checkbox(
+            f"🚩 Show Flagged Only ({len(st.session_state.flagged_questions)})",
+            value=st.session_state.show_flagged_only,
+            key="flagged_filter"
+        )
+        if show_flagged != st.session_state.show_flagged_only:
+            st.session_state.show_flagged_only = show_flagged
+            st.session_state.current_page_num = 0  # Reset to first page
+            st.rerun()
+    
+    # Filter questions if needed
+    if st.session_state.show_flagged_only:
+        filtered_questions = [q for q in questions if q["question_id"] in st.session_state.flagged_questions]
+        if not filtered_questions:
+            st.warning("No questions flagged for review. Flag questions using the 🚩 Flag for Review button.")
+            st.session_state.show_flagged_only = False
+            if st.button("Show All Questions"):
+                st.rerun()
+            return
+        questions = filtered_questions
+        # Recalculate pagination for filtered questions
+        total_pages = (len(questions) + questions_per_page - 1) // questions_per_page
+        current_page = min(st.session_state.current_page_num, total_pages - 1)
+        st.session_state.current_page_num = current_page
+        start_idx = current_page * questions_per_page
+        end_idx = min(start_idx + questions_per_page, len(questions))
+        current_questions = questions[start_idx:end_idx]
+    
     # Progress indicator
     answered = len(st.session_state.user_answers)
-    progress = answered / len(questions) if len(questions) > 0 else 0
+    progress = answered / len(st.session_state.exam_questions) if len(st.session_state.exam_questions) > 0 else 0
     st.progress(progress)
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Questions", f"{start_idx + 1}-{end_idx} of {len(questions)}")
+        display_total = len(st.session_state.exam_questions)
+        st.metric("Total Questions", display_total)
     with col2:
-        st.metric("Page", f"{current_page + 1} / {total_pages}")
+        if st.session_state.show_flagged_only:
+            st.metric("Showing", f"{len(questions)} flagged")
+        else:
+            st.metric("Page", f"{current_page + 1} / {total_pages}")
     with col3:
-        st.metric("Answered", f"{answered} / {len(questions)}")
+        st.metric("Answered", f"{answered} / {display_total}")
+    with col4:
+        st.metric("Flagged", len(st.session_state.flagged_questions))
     
     st.markdown("---")
     
     # Display all questions on current page
     for idx, question in enumerate(current_questions):
-        actual_idx = start_idx + idx
+        # Calculate the actual index in the original full question list
+        if st.session_state.show_flagged_only:
+            # Find the actual index in the original exam questions
+            actual_idx = st.session_state.exam_questions.index(question)
+        else:
+            actual_idx = start_idx + idx
         display_question(question, actual_idx)
     
     # Navigation buttons - fixed at bottom
@@ -403,11 +454,14 @@ def display_question(question: Dict[str, Any], index: int):
     question_text = re.sub(r'This is a case study\..*?(?=Question|\Z)', '', question_text, flags=re.IGNORECASE | re.DOTALL)
     question_text = re.sub(r'Microsoft Certified.*?(?:Question Bank|Study Materials).*?(?:\(|-|\d+ of \d+|$)', '', question_text, flags=re.IGNORECASE | re.DOTALL)
 
-    # Get PDF source and question number
+    # Get PDF source - use incremental question number (index + 1)
     pdf_source = question.get("source_pdf", "Unknown")
-    pdf_question_num = question.get("pdf_question_number", str(index + 1))
     
-    st.markdown(f"### Question {pdf_question_num} ({pdf_source})")
+    # Add flag indicator if question is flagged
+    is_flagged = question["question_id"] in st.session_state.flagged_questions
+    flag_indicator = "🚩 " if is_flagged else ""
+    
+    st.markdown(f"### {flag_indicator}Question {index + 1} ({pdf_source})")
     st.markdown(question_text.strip())
     
     # Display images if any
@@ -520,24 +574,39 @@ def display_question(question: Dict[str, Any], index: int):
         if answer:
             st.session_state.user_answers[question_id] = answer
     
-    # Show Answer button (optional during exam)
+    # Action buttons
     st.markdown("---")
-    if st.button("💡 Show Answer", key=f"show_answer_{question_id}"):
-        correct_answer = question.get("web_recommended_answer") or question.get("pdf_answer") or question.get("ai_recommended_answer")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("💡 Show Answer", key=f"show_answer_{question_id}"):
+            correct_answer = question.get("web_recommended_answer") or question.get("pdf_answer") or question.get("ai_recommended_answer")
+            
+            if correct_answer:
+                st.success(f"**Correct Answer:** {correct_answer}")
+                
+                # Show explanations if available
+                if question.get("web_explanation"):
+                    with st.expander("📖 Web Explanation"):
+                        st.info(question["web_explanation"])
+                
+                if question.get("ai_explanation"):
+                    with st.expander("🤖 AI Explanation"):
+                        st.info(question["ai_explanation"])
+            else:
+                st.warning("No answer available for this question")
+    
+    with col2:
+        # Flag for review button
+        is_flagged = question_id in st.session_state.flagged_questions
+        flag_label = "🚩 Unflag" if is_flagged else "🚩 Flag for Review"
         
-        if correct_answer:
-            st.success(f"**Correct Answer:** {correct_answer}")
-            
-            # Show explanations if available
-            if question.get("web_explanation"):
-                with st.expander("📖 Web Explanation"):
-                    st.info(question["web_explanation"])
-            
-            if question.get("ai_explanation"):
-                with st.expander("🤖 AI Explanation"):
-                    st.info(question["ai_explanation"])
-        else:
-            st.warning("No answer available for this question")
+        if st.button(flag_label, key=f"flag_{question_id}"):
+            if is_flagged:
+                st.session_state.flagged_questions.discard(question_id)
+            else:
+                st.session_state.flagged_questions.add(question_id)
+            st.rerun()
 
 
 def display_exam_results(exam_name: str, questions: List[Dict[str, Any]]):
@@ -602,9 +671,8 @@ def display_exam_results(exam_name: str, questions: List[Dict[str, Any]]):
     for idx, detail in enumerate(details):
         question = questions[idx]
         pdf_source = question.get("source_pdf", "Unknown")
-        pdf_question_num = question.get("pdf_question_number", str(idx + 1))
         
-        with st.expander(f"Question {pdf_question_num} ({pdf_source}) - {'✅ Correct' if detail['is_correct'] else '❌ Incorrect'}"):
+        with st.expander(f"Question {idx + 1} ({pdf_source}) - {'✅ Correct' if detail['is_correct'] else '❌ Incorrect'}"):
             st.markdown(f"**Question:** {detail['question']}")
             st.markdown(f"**Your Answer:** {detail['user_answer'] or 'Not answered'}")
             st.markdown(f"**Correct Answer:** {detail['correct_answer']}")
@@ -631,6 +699,9 @@ def display_exam_results(exam_name: str, questions: List[Dict[str, Any]]):
             st.session_state.exam_submitted = False
             st.session_state.user_answers = {}
             st.session_state.current_question_index = 0
+            st.session_state.current_page_num = 0
+            st.session_state.flagged_questions = set()
+            st.session_state.show_flagged_only = False
             st.rerun()
 
 
@@ -655,32 +726,29 @@ def edit_exam_page():
     
     st.info(f"Total Questions: {len(questions)}")
     
-    # Question selector
-    question_ids = [q["question_id"] for q in questions]
+    # Question selector - use incremental numbering
+    question_options = list(range(len(questions)))
     
     # Create a mapping for display
-    def format_question_label(q_id):
-        q = next((q for q in questions if q["question_id"] == q_id), None)
-        if q:
-            pdf_source = q.get("source_pdf", "Unknown")
-            pdf_num = q.get("pdf_question_number", str(q_id))
-            return f"Question {pdf_num} ({pdf_source})"
-        return f"Question {q_id}"
+    def format_question_label(idx):
+        q = questions[idx]
+        pdf_source = q.get("source_pdf", "Unknown")
+        return f"Question {idx + 1} ({pdf_source})"
     
-    selected_id = st.selectbox(
+    selected_idx = st.selectbox(
         "Select Question to Edit",
-        question_ids,
+        question_options,
         format_func=format_question_label
     )
     
-    # Find selected question
-    question = next((q for q in questions if q["question_id"] == selected_id), None)
+    # Get the actual question
+    question = questions[selected_idx]
+    selected_id = question["question_id"]
     
     if question:
         st.markdown("---")
         pdf_source = question.get("source_pdf", "Unknown")
-        pdf_num = question.get("pdf_question_number", str(selected_id))
-        st.subheader(f"Edit Question {pdf_num} ({pdf_source})")
+        st.subheader(f"Edit Question {selected_idx + 1} ({pdf_source})")
         
         # Editable fields
         with st.form(f"edit_form_{selected_id}"):
